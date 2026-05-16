@@ -25,7 +25,7 @@ Rules:
 """
 
 
-def build_graph(tools: list):
+def build_graph(tools: list, checkpointer=None):
     """
     Build and compile the LangGraph ReAct agent.
 
@@ -34,12 +34,12 @@ def build_graph(tools: list):
             if tool_call:  --> [tools node] --> [agent node]  (loop)
             if done:       --> END
 
-    The MemorySaver checkpointer persists message history per thread_id,
+    The checkpointer persists message history per thread_id,
     enabling multi-turn conversations without manual history management.
     """
     llm = ChatGroq(
         groq_api_key=os.getenv("GROQ_API_KEY"),
-        model_name="llama-3.3-70b-versatile",   
+        model_name="llama-3.3-70b-versatile",  
         temperature=0,
     )
 
@@ -65,5 +65,5 @@ def build_graph(tools: list):
     workflow.add_conditional_edges("agent", tools_condition)
     workflow.add_edge("tools", "agent")   # after tool runs, go back to agent
 
-    # MemorySaver stores message history keyed by thread_id in RAM
-    return workflow.compile(checkpointer=MemorySaver())
+    # Use the provided checkpointer (e.g. MemorySaver or SqliteSaver)
+    return workflow.compile(checkpointer=checkpointer)

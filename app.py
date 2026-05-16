@@ -1,7 +1,9 @@
 # app.py
 import uuid
+import sqlite3
 import streamlit as st
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.sqlite import SqliteSaver
 from agent import build_graph, ALL_TOOLS
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -104,9 +106,14 @@ TOOL_LABELS = {
 
 # ── Session state init ────────────────────────────────────────────────────────
 def init_state():
+    if "conn" not in st.session_state:
+        st.session_state.conn = sqlite3.connect("chat_memory.db", check_same_thread=False)
+    if "checkpointer" not in st.session_state:
+        st.session_state.checkpointer = SqliteSaver(st.session_state.conn)
+        st.session_state.checkpointer.setup()  # ensures memory tables exist
     if "graph" not in st.session_state:
         # Build the LangGraph agent once and cache it in session
-        st.session_state.graph = build_graph(ALL_TOOLS)
+        st.session_state.graph = build_graph(ALL_TOOLS, st.session_state.checkpointer)
     if "thread_id" not in st.session_state:
         # Each conversation gets a unique ID for MemorySaver
         st.session_state.thread_id = str(uuid.uuid4())

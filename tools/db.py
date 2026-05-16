@@ -1,74 +1,74 @@
-# tools/db.py
 import os
-import requests
+import sqlite3
 
-# Dummy data
-dummy_patients = [
-    {"id": 1, "name": "Ahmed Ali", "condition": "Back pain"},
-    {"id": 2, "name": "Sara Hassan", "condition": "Knee injury"}
-]
+DB_PATH = "clinic.db"
 
-dummy_doctors = [
-    {"id": 101, "name": "Dr. Omar Khaled", "specialty": "Physiotherapy"},
-    {"id": 102, "name": "Dr. Mariam Youssef", "specialty": "Sports Medicine"}
-]
+def _run_query(query: str, params: tuple = ()) -> list:
+    """Helper to run a SQLite query and return dicts."""
+    if not os.path.exists(DB_PATH):
+        return [{"error": f"Database not found at {DB_PATH}. Run db_setup.py first."}]
+        
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # to get dict-like rows
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
-dummy_prescriptions = [
-    {"patient_id": 1, "medication": "Painkillers", "dosage": "2/day"},
-    {"patient_id": 2, "medication": "Anti-inflammatory", "dosage": "1/day"}
-]
+def _format_markdown(rows: list, entity_name: str) -> str:
+    """Format a list of dictionary rows into a markdown table or fallback message."""
+    if not rows:
+        return f"No {entity_name} found."
+    
+    if "error" in rows[0]:
+        return rows[0]["error"]
+        
+    headers = list(rows[0].keys())
+    header_row = "| " + " | ".join(headers) + " |"
+    divider_row = "|" + "|".join(["---"] * len(headers)) + "|"
+    
+    table_rows = []
+    for row in rows:
+        str_values = [str(row[h]) for h in headers]
+        table_rows.append("| " + " | ".join(str_values) + " |")
+        
+    return f"**Results for {entity_name}:**\n" + "\n".join([header_row, divider_row] + table_rows)
 
-dummy_appointments = [
-    {"patient_id": 1, "doctor_id": 101, "date": "2025-08-10"},
-    {"patient_id": 2, "doctor_id": 102, "date": "2025-08-12"}
-]
 
-def _fallback_message(results, label):
-    if not results:
-        return f"No {label} found."
-    return "\n".join([str(item) for item in results])
+def fetch_patient_data(query: str, backend_url=None) -> str:
+    sql = "SELECT * FROM patients WHERE name LIKE ? OR condition LIKE ?"
+    param = f"%{query}%"
+    rows = _run_query(sql, (param, param))
+    return _format_markdown(rows, "patients")
 
-def fetch_patient_data(query, backend_url=None):
-    if backend_url:
-        try:
-            resp = requests.get(f"{backend_url}/patients", params={"q": query})
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            return f"Error fetching patient data from backend: {e}"
-    # Dummy mode
-    results = [p for p in dummy_patients if query.lower() in p["name"].lower()]
-    return _fallback_message(results, "patients")
+def fetch_doctor_data(query: str, backend_url=None) -> str:
+    sql = "SELECT * FROM doctors WHERE name LIKE ? OR specialty LIKE ?"
+    param = f"%{query}%"
+    rows = _run_query(sql, (param, param))
+    return _format_markdown(rows, "doctors")
 
-def fetch_doctor_data(query, backend_url=None):
-    if backend_url:
-        try:
-            resp = requests.get(f"{backend_url}/doctors", params={"q": query})
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            return f"Error fetching doctor data from backend: {e}"
-    results = [d for d in dummy_doctors if query.lower() in d["name"].lower()]
-    return _fallback_message(results, "doctors")
+def fetch_prescriptions(query: str, backend_url=None) -> str:
+    # Query allows searching by patient name or medication name
+    sql = """
+    SELECT pr.medication, pr.dosage, pr.instructions, p.name as patient_name
+    FROM prescriptions pr
+    JOIN patients p ON pr.patient_id = p.id
+    WHERE p.name LIKE ? OR pr.medication LIKE ?
+    """
+    param = f"%{query}%"
+    rows = _run_query(sql, (param, param))
+    return _format_markdown(rows, "prescriptions")
 
-def fetch_prescriptions(query, backend_url=None):
-    if backend_url:
-        try:
-            resp = requests.get(f"{backend_url}/prescriptions", params={"q": query})
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            return f"Error fetching prescriptions from backend: {e}"
-    results = [p for p in dummy_prescriptions if query.lower() in p["medication"].lower()]
-    return _fallback_message(results, "prescriptions")
-
-def fetch_appointments(query, backend_url=None):
-    if backend_url:
-        try:
-            resp = requests.get(f"{backend_url}/appointments", params={"q": query})
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            return f"Error fetching appointments from backend: {e}"
-    results = [a for a in dummy_appointments if query.lower() in str(a["patient_id"])]
-    return _fallback_message(results, "appointments")
+def fetch_appointments(query: str, backend_url=None) -> str:
+    # Query allows searching by patient name
+    sql = """
+    SELECT a.appointment_date, a.status, p.name as patient_name, d.name as doctor_name
+    FROM appointments a
+    JOIN patients p ON a.patient_id = p.id
+    JOIN doctors d ON a.doctor_id = d.id
+    WHERE p.name LIKE ?
+    """
+    param = f"%{query}%"
+    rows = _run_query(sql, (param, param))
+    return _format_markdown(rows, "appointments")
