@@ -3,7 +3,8 @@ import re
 import uuid
 import sqlite3
 import streamlit as st
-from langchain_core.messages import HumanMessage
+from datetime import datetime
+from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 from agent import build_graph, ALL_TOOLS
 
@@ -125,6 +126,32 @@ st.markdown("""
     margin: 24px 0 12px 0;
 }
 
+/* Chat history item */
+.chat-history-item {
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.82rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.chat-history-item:hover {
+    background: rgba(56, 189, 248, 0.08);
+    border-color: rgba(56, 189, 248, 0.2);
+    color: #f8fafc;
+}
+.chat-history-item.active {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+}
+
 /* Hide Streamlit chrome */
 #MainMenu, footer, header { visibility: hidden; }
 </style>
@@ -142,25 +169,70 @@ TOOL_LABELS = {
     "search_medical_journals": "📚 PubMed API",
 }
 
+
+def ensure_history_table(conn: sqlite3.Connection):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS thread_history (
+            thread_id TEXT PRIMARY KEY,
+            title     TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+
+
+def save_thread_title(conn: sqlite3.Connection, thread_id: str, title: str):
+    conn.execute("""
+        INSERT INTO thread_history (thread_id, title, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(thread_id) DO UPDATE SET updated_at = excluded.updated_at
+    """, (thread_id, title[:72], datetime.utcnow().isoformat()))
+    conn.commit()
+
+
+def load_thread_history(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT thread_id, title, updated_at FROM thread_history ORDER BY updated_at DESC LIMIT 40"
+    ).fetchall()
+    return [{"thread_id": r[0], "title": r[1], "updated_at": r[2]} for r in rows]
+
+
+def restore_thread_messages(graph, thread_id: str) -> list[dict]:
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        state = graph.get_state(config)
+        messages = state.values.get("messages", [])
+        result = []
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                result.append({"role": "user", "content": msg.content, "tools_used": []})
+            elif isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
+                result.append({"role": "assistant", "content": msg.content, "tools_used": []})
+        return result
+    except Exception:
+        return []
+
+
 def init_state():
     if "conn" not in st.session_state:
         st.session_state.conn = sqlite3.connect("chat_memory.db", check_same_thread=False)
     if "checkpointer" not in st.session_state:
         st.session_state.checkpointer = SqliteSaver(st.session_state.conn)
-        st.session_state.checkpointer.setup()  # ensures memory tables exist
+        st.session_state.checkpointer.setup()
+    ensure_history_table(st.session_state.conn)
     if "graph" not in st.session_state:
-        # Build the LangGraph agent once and cache it in session
         st.session_state.graph = build_graph(ALL_TOOLS, st.session_state.checkpointer)
     if "thread_id" not in st.session_state:
-        # Each conversation gets a unique ID for MemorySaver
         st.session_state.thread_id = str(uuid.uuid4())
     if "messages" not in st.session_state:
-        # UI message log: list of {role, content, tools_used}
         st.session_state.messages = []
     if "tool_call_count" not in st.session_state:
         st.session_state.tool_call_count = 0
     if "quick_query" not in st.session_state:
         st.session_state.quick_query = None
+    if "thread_title_saved" not in st.session_state:
+        st.session_state.thread_title_saved = False
+
 
 def render_sidebar():
     with st.sidebar:
@@ -173,14 +245,14 @@ def render_sidebar():
             <span class='status-online'><span class='dot'></span>Online</span>
         </div>
         """, unsafe_allow_html=True)
-        
-        # New Chat Button - Moved up and made smaller
+
         c1, c2, c3 = st.columns([1, 4, 1])
         with c2:
             if st.button("✨ New Chat", use_container_width=True, type="primary"):
                 st.session_state.messages = []
                 st.session_state.thread_id = str(uuid.uuid4())
                 st.session_state.tool_call_count = 0
+                st.session_state.thread_title_saved = False
                 st.rerun()
 
         st.divider()
@@ -191,6 +263,24 @@ def render_sidebar():
         c2.metric("🔧 Tool Calls", st.session_state.tool_call_count)
 
         st.divider()
+
+        history = load_thread_history(st.session_state.conn)
+        if history:
+            st.markdown("<p class='section-label'>💬 Chat History</p>", unsafe_allow_html=True)
+            for chat in history:
+                is_active = chat["thread_id"] == st.session_state.thread_id
+                label = ("▶ " if is_active else "") + chat["title"]
+                if st.button(label, key=f"hist_{chat['thread_id']}", use_container_width=True):
+                    if chat["thread_id"] != st.session_state.thread_id:
+                        st.session_state.thread_id = chat["thread_id"]
+                        st.session_state.messages = restore_thread_messages(
+                            st.session_state.graph, chat["thread_id"]
+                        )
+                        st.session_state.tool_call_count = 0
+                        st.session_state.thread_title_saved = True
+                        st.rerun()
+
+            st.divider()
 
         st.markdown("<p class='section-label'>Quick Actions</p>", unsafe_allow_html=True)
         quick_actions = {
@@ -212,6 +302,7 @@ def render_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
+
 def render_message_with_pdf(content: str):
     """Detects PDF_GENERATED tag, strips it from text, and renders a download button."""
     match = re.search(r'\[PDF_GENERATED:\s*(.*?)\]', content)
@@ -227,12 +318,13 @@ def render_message_with_pdf(content: str):
                 data=pdf_bytes,
                 file_name=os.path.basename(pdf_path),
                 mime="application/pdf",
-                key=uuid.uuid4().hex  # unique key to prevent UI collisions
+                key=uuid.uuid4().hex
             )
         except Exception:
             pass
     else:
         st.markdown(content)
+
 
 def render_messages():
     for msg in st.session_state.messages:
@@ -253,15 +345,8 @@ def render_messages():
                     )
                 render_message_with_pdf(msg["content"])
 
+
 def run_agent(user_input: str):
-    """
-    Stream graph updates and render the response live.
-    stream_mode='updates' yields one dict per node execution:
-        { "agent": {"messages": [AIMessage(...)]} }
-        { "tools": {"messages": [ToolMessage(...)]} }
-    We intercept tool messages to show which tools fired,
-    and the final AIMessage (no tool_calls) as the response.
-    """
     config = {"configurable": {"thread_id": st.session_state.thread_id}}
     tools_used = []
     final_response = ""
@@ -280,7 +365,6 @@ def run_agent(user_input: str):
                     for msg in node_data.get("messages", []):
 
                         if node_name == "tools":
-                            # A tool just ran — capture its name
                             tool_name = getattr(msg, "name", "unknown")
                             tools_used.append(tool_name)
                             st.session_state.tool_call_count += 1
@@ -290,24 +374,21 @@ def run_agent(user_input: str):
                                 f'🔧 Using <b style="color:#58a6ff">{label}</b>…</div>',
                                 unsafe_allow_html=True,
                             )
-                            
-                            # Safely extract PDF tag if the tool generated one
+
                             if hasattr(msg, "content") and "[PDF_GENERATED:" in msg.content:
                                 match = re.search(r'\[PDF_GENERATED:\s*(.*?)\]', msg.content)
                                 if match:
                                     st.session_state.pending_pdf_path = match.group(1)
 
                         elif node_name == "agent":
-                            # LLM spoke — if it's a final answer (no more tool calls)
                             if hasattr(msg, "content") and msg.content:
                                 if not getattr(msg, "tool_calls", None):
                                     final_response = msg.content
-                                    
-                                    # Inject PDF tag if a tool generated one
+
                                     if hasattr(st.session_state, "pending_pdf_path"):
                                         final_response += f"\n\n[PDF_GENERATED: {st.session_state.pending_pdf_path}]"
                                         del st.session_state.pending_pdf_path
-                                        
+
                                     status.empty()
                                     with output.container():
                                         render_message_with_pdf(final_response)
@@ -317,12 +398,12 @@ def run_agent(user_input: str):
             output.markdown(final_response)
             status.empty()
 
-    # Persist to UI history
     st.session_state.messages.append({
         "role": "assistant",
         "content": final_response or "عذرًا، لم أتمكن من الرد.",
-        "tools_used": list(dict.fromkeys(tools_used)),  # deduplicated, order preserved
+        "tools_used": list(dict.fromkeys(tools_used)),
     })
+
 
 def main():
     init_state()
@@ -337,20 +418,24 @@ def main():
 
     render_messages()
 
-    # Handle sidebar quick-action buttons
     if st.session_state.quick_query:
         query = st.session_state.quick_query
         st.session_state.quick_query = None
         st.session_state.messages.append({"role": "user", "content": query})
-        with st.chat_message("user"):
+        if not st.session_state.thread_title_saved:
+            save_thread_title(st.session_state.conn, st.session_state.thread_id, query)
+            st.session_state.thread_title_saved = True
+        with st.chat_message("user", avatar="👤"):
             st.markdown(query)
         run_agent(query)
         st.rerun()
 
-    # Main chat input
     if prompt := st.chat_input("Ask me anything — medical records, symptoms, medications…"):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
+        if not st.session_state.thread_title_saved:
+            save_thread_title(st.session_state.conn, st.session_state.thread_id, prompt)
+            st.session_state.thread_title_saved = True
+        with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
         run_agent(prompt)
 
