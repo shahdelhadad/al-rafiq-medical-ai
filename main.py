@@ -1,4 +1,3 @@
-# main.py — CLI entry point (the Streamlit UI is in app.py)
 import uuid
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
@@ -28,7 +27,6 @@ def main():
                 {"messages": [HumanMessage(content=user_input)]},
                 config=config,
             )
-            # The last message in state is always the final AI response
             response = result["messages"][-1].content
             print(f"\n🤖 الرفيق الطبي: {response}\n")
 

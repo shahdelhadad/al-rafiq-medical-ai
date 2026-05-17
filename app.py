@@ -7,7 +7,6 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 from agent import build_graph, ALL_TOOLS
 
-# ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="الرفيق الطبي | Medical AI",
     page_icon="🏥",
@@ -15,80 +14,115 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Styling ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
-*, body { font-family: 'Inter', sans-serif !important; }
+*, body { font-family: 'Outfit', sans-serif !important; }
 
-.stApp { background-color: #0d1117; }
+.stApp { 
+    background: linear-gradient(145deg, #020617 0%, #0f172a 100%); 
+    color: #f8fafc;
+}
 
 /* Sidebar */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #161b27 0%, #0d1117 100%);
-    border-right: 1px solid #21262d;
+    background: rgba(15, 23, 42, 0.45) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
-[data-testid="stSidebar"] * { color: #c9d1d9 !important; }
 
 /* Header card */
 .hero {
-    background: linear-gradient(135deg, #161b27 0%, #0d1117 100%);
-    border: 1px solid #21262d;
-    border-radius: 16px;
-    padding: 28px 32px;
-    margin-bottom: 24px;
+    background: rgba(30, 41, 59, 0.3);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 32px 32px;
+    margin-bottom: 28px;
     text-align: center;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 .hero h1 {
-    font-size: 2rem;
+    font-size: 2.2rem;
     font-weight: 700;
-    background: linear-gradient(135deg, #58a6ff, #3fb950);
+    background: linear-gradient(135deg, #38bdf8, #818cf8, #34d399);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    margin: 0 0 8px 0;
+    margin: 0 0 10px 0;
+    letter-spacing: -0.02em;
 }
-.hero p { color: #8b949e; font-size: 0.92rem; margin: 0; }
+.hero p { color: #94a3b8; font-size: 1rem; margin: 0; font-weight: 300; }
+
+/* Chat inputs and blocks */
+[data-testid="stChatInput"] {
+    background: rgba(30, 41, 59, 0.6) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 16px !important;
+    backdrop-filter: blur(10px);
+}
+
+/* Buttons */
+.stButton>button {
+    border-radius: 12px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+}
+.stButton>button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);
+    border-color: #38bdf8 !important;
+    color: #38bdf8 !important;
+}
 
 /* Tool badge */
 .tool-badge {
     display: inline-block;
-    background: #0d2137;
-    color: #58a6ff;
-    border: 1px solid #1f6feb;
-    padding: 2px 10px;
+    background: rgba(14, 165, 233, 0.1);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    padding: 4px 12px;
     border-radius: 20px;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
     margin: 2px 3px;
+    backdrop-filter: blur(4px);
+    transition: all 0.2s;
+}
+.tool-badge:hover {
+    background: rgba(14, 165, 233, 0.2);
+    transform: translateY(-1px);
 }
 
 /* Status pill */
 .status-online {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: #0d2818;
-    color: #3fb950;
-    border: 1px solid #238636;
-    padding: 4px 12px;
+    gap: 8px;
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.2);
+    padding: 6px 14px;
     border-radius: 20px;
-    font-size: 0.82rem;
-    font-weight: 600;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
 }
-.dot { width: 7px; height: 7px; background: #3fb950;
+.dot { width: 8px; height: 8px; background: #34d399;
         border-radius: 50%; display: inline-block;
-        animation: blink 2s ease-in-out infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+        box-shadow: 0 0 8px #34d399;
+        animation: blink 2.5s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
 
 /* Section label */
 .section-label {
-    color: #484f58;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: .08em;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: .1em;
     text-transform: uppercase;
-    margin: 18px 0 8px 0;
+    margin: 24px 0 12px 0;
 }
 
 /* Hide Streamlit chrome */
@@ -96,7 +130,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Tool display names ────────────────────────────────────────────────────────
 TOOL_LABELS = {
     "search_web":       "🔍 Web Search",
     "get_patient_data": "👤 Patient Lookup",
@@ -109,7 +142,6 @@ TOOL_LABELS = {
     "search_medical_journals": "📚 PubMed API",
 }
 
-# ── Session state init ────────────────────────────────────────────────────────
 def init_state():
     if "conn" not in st.session_state:
         st.session_state.conn = sqlite3.connect("chat_memory.db", check_same_thread=False)
@@ -130,18 +162,26 @@ def init_state():
     if "quick_query" not in st.session_state:
         st.session_state.quick_query = None
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
 def render_sidebar():
     with st.sidebar:
         st.markdown("""
         <div style='text-align:center; padding: 16px 0 8px'>
             <div style='font-size:2.8rem'>🏥</div>
-            <h2 style='color:#e6edf3; margin:6px 0 2px; font-size:1.2rem'>الرفيق الطبي</h2>
-            <p style='color:#8b949e; font-size:.82rem; margin:0'>Al-Rafiq Al-Tibbi</p>
+            <h2 style='color:#f8fafc; margin:6px 0 2px; font-size:1.2rem'>الرفيق الطبي</h2>
+            <p style='color:#94a3b8; font-size:.82rem; margin:0'>Al-Rafiq Al-Tibbi</p>
             <br>
             <span class='status-online'><span class='dot'></span>Online</span>
         </div>
         """, unsafe_allow_html=True)
+        
+        # New Chat Button - Moved up and made smaller
+        c1, c2, c3 = st.columns([1, 4, 1])
+        with c2:
+            if st.button("✨ New Chat", use_container_width=True, type="primary"):
+                st.session_state.messages = []
+                st.session_state.thread_id = str(uuid.uuid4())
+                st.session_state.tool_call_count = 0
+                st.rerun()
 
         st.divider()
 
@@ -164,12 +204,6 @@ def render_sidebar():
                 st.session_state.quick_query = query
 
         st.divider()
-
-        if st.button("🔄 New Conversation", use_container_width=True, type="primary"):
-            st.session_state.messages = []
-            st.session_state.thread_id = str(uuid.uuid4())
-            st.session_state.tool_call_count = 0
-            st.rerun()
 
         st.markdown("""
         <div style='text-align:center; color:#484f58; font-size:.73rem; margin-top:24px'>
@@ -200,11 +234,10 @@ def render_message_with_pdf(content: str):
     else:
         st.markdown(content)
 
-# ── Message rendering ─────────────────────────────────────────────────────────
 def render_messages():
     for msg in st.session_state.messages:
         if msg["role"] == "user":
-            with st.chat_message("user"):
+            with st.chat_message("user", avatar="👤"):
                 st.markdown(msg["content"])
         else:
             with st.chat_message("assistant", avatar="🏥"):
@@ -220,7 +253,6 @@ def render_messages():
                     )
                 render_message_with_pdf(msg["content"])
 
-# ── Core: stream a response from the graph ────────────────────────────────────
 def run_agent(user_input: str):
     """
     Stream graph updates and render the response live.
@@ -258,12 +290,24 @@ def run_agent(user_input: str):
                                 f'🔧 Using <b style="color:#58a6ff">{label}</b>…</div>',
                                 unsafe_allow_html=True,
                             )
+                            
+                            # Safely extract PDF tag if the tool generated one
+                            if hasattr(msg, "content") and "[PDF_GENERATED:" in msg.content:
+                                match = re.search(r'\[PDF_GENERATED:\s*(.*?)\]', msg.content)
+                                if match:
+                                    st.session_state.pending_pdf_path = match.group(1)
 
                         elif node_name == "agent":
                             # LLM spoke — if it's a final answer (no more tool calls)
                             if hasattr(msg, "content") and msg.content:
                                 if not getattr(msg, "tool_calls", None):
                                     final_response = msg.content
+                                    
+                                    # Inject PDF tag if a tool generated one
+                                    if hasattr(st.session_state, "pending_pdf_path"):
+                                        final_response += f"\n\n[PDF_GENERATED: {st.session_state.pending_pdf_path}]"
+                                        del st.session_state.pending_pdf_path
+                                        
                                     status.empty()
                                     with output.container():
                                         render_message_with_pdf(final_response)
@@ -280,7 +324,6 @@ def run_agent(user_input: str):
         "tools_used": list(dict.fromkeys(tools_used)),  # deduplicated, order preserved
     })
 
-# ── Main layout ───────────────────────────────────────────────────────────────
 def main():
     init_state()
     render_sidebar()

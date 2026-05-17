@@ -4,14 +4,12 @@ import os
 DB_PATH = "clinic.db"
 
 def init_db():
-    # Remove old DB if it exists to ensure fresh generation
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Create Tables
     cursor.executescript('''
     CREATE TABLE patients (
         id INTEGER PRIMARY KEY,
@@ -49,7 +47,6 @@ def init_db():
     );
     ''')
 
-    # Seed Data - Patients
     patients = [
         (1, "Ahmed Ali", 45, "Male", "Chronic Back Pain", "0501234567"),
         (2, "Sara Hassan", 32, "Female", "Knee Injury (ACL tear)", "0509876543"),
@@ -59,7 +56,6 @@ def init_db():
     ]
     cursor.executemany('INSERT INTO patients VALUES (?, ?, ?, ?, ?, ?)', patients)
 
-    # Seed Data - Doctors
     doctors = [
         (101, "Dr. Omar Khaled", "Physiotherapy", "omar.khaled@clinic.com"),
         (102, "Dr. Mariam Youssef", "Sports Medicine", "mariam.y@clinic.com"),
@@ -69,7 +65,6 @@ def init_db():
     ]
     cursor.executemany('INSERT INTO doctors VALUES (?, ?, ?, ?)', doctors)
 
-    # Seed Data - Prescriptions
     prescriptions = [
         (1, "Ibuprofen 400mg", "1 pill twice a day", "Take after meals to avoid stomach upset"),
         (1, "Muscle Relaxant", "1 pill before bed", "May cause drowsiness"),
@@ -81,7 +76,6 @@ def init_db():
     ]
     cursor.executemany('INSERT INTO prescriptions (patient_id, medication, dosage, instructions) VALUES (?, ?, ?, ?)', prescriptions)
 
-    # Seed Data - Appointments
     appointments = [
         (1, 101, "2025-08-10 10:00:00", "Confirmed"),
         (2, 102, "2025-08-12 14:30:00", "Confirmed"),

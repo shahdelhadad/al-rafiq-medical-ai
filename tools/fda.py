@@ -17,7 +17,6 @@ def search_openfda_drug_reactions(drug_name: str) -> str:
         if not results:
             return f"No adverse reaction data found in OpenFDA for '{drug_name}'."
             
-        # Extract the top 5 adverse reactions
         top_reactions = results[:5]
         
         output = f"**OpenFDA Adverse Reactions for {drug_name.capitalize()}:**\n"

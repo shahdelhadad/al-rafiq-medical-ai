@@ -4,3 +4,14 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+
+# Generated reports
+reports/
+
+# IDE files
+.history/

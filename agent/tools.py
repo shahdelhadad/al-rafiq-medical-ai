@@ -1,9 +1,7 @@
-# agent/tools.py
 import os
 from dotenv import load_dotenv
 from langchain_core.tools import tool
 
-# Import underlying logic from the modular tools/ directory
 from tools.db import fetch_patient_data, fetch_doctor_data, fetch_prescriptions, fetch_appointments
 from tools.search import SearchTool
 from tools.summary import create_medical_summary

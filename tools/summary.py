@@ -19,18 +19,11 @@ def generate_pdf(content: str, patient_name: str) -> str:
     pdf = PDFReport()
     pdf.add_page()
     
-    # fpdf2 supports basic formatting if we use multi_cell, but to keep it simple and avoid encoding issues,
-    # we'll use a basic font and clean up markdown.
-    # Note: fpdf2 requires a unicode font for Arabic, but for now we'll stick to latin-1 encoding
-    # and encode/decode to ignore un-encodable characters (since the prompt asks for English/Arabic).
-    # To properly support Arabic, we would need to load an Arabic TTF font, but for simplicity we will ignore errors.
     
-    # Add a fallback unicode font (DejaVu) if needed, but for CV projects, basic text is fine.
     pdf.set_font("helvetica", size=11)
     
     cleaned_content = content.replace('**', '').replace('*', '-')
     
-    # encode and decode to strip out characters that standard helvetica can't render
     cleaned_content = cleaned_content.encode('latin-1', 'replace').decode('latin-1')
     
     pdf.multi_cell(0, 8, cleaned_content)
@@ -65,7 +58,6 @@ def create_medical_summary(patient_name: str, backend_url=None) -> str:
     
     content = llm.invoke(prompt).content
     
-    # Generate PDF
     pdf_path = generate_pdf(content, patient_name)
     
     return f"[PDF_GENERATED: {pdf_path}]\n\n" + content

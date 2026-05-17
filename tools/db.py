@@ -9,7 +9,7 @@ def _run_query(query: str, params: tuple = ()) -> list:
         return [{"error": f"Database not found at {DB_PATH}. Run db_setup.py first."}]
         
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # to get dict-like rows
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -49,7 +49,6 @@ def fetch_doctor_data(query: str, backend_url=None) -> str:
     return _format_markdown(rows, "doctors")
 
 def fetch_prescriptions(query: str, backend_url=None) -> str:
-    # Query allows searching by patient name or medication name
     sql = """
     SELECT pr.medication, pr.dosage, pr.instructions, p.name as patient_name
     FROM prescriptions pr
@@ -61,7 +60,6 @@ def fetch_prescriptions(query: str, backend_url=None) -> str:
     return _format_markdown(rows, "prescriptions")
 
 def fetch_appointments(query: str, backend_url=None) -> str:
-    # Query allows searching by patient name
     sql = """
     SELECT a.appointment_date, a.status, p.name as patient_name, d.name as doctor_name
     FROM appointments a
@@ -70,5 +68,5 @@ def fetch_appointments(query: str, backend_url=None) -> str:
     WHERE p.name LIKE ?
     """
     param = f"%{query}%"
-    rows = _run_query(sql, (param, param))
+    rows = _run_query(sql, (param,))
     return _format_markdown(rows, "appointments")
