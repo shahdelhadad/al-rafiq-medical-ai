@@ -1,4 +1,5 @@
-# app.py
+import os
+import re
 import uuid
 import sqlite3
 import streamlit as st
@@ -102,6 +103,10 @@ TOOL_LABELS = {
     "get_doctor_data":  "👨‍⚕️ Doctor Lookup",
     "get_prescriptions":"💊 Prescriptions",
     "get_appointments": "📅 Appointments",
+    "generate_medical_summary": "📝 Medical Summary",
+    "check_symptoms_and_recommend_doctor": "🩺 Symptom Checker",
+    "search_fda_adverse_events": "🏛️ OpenFDA API",
+    "search_medical_journals": "📚 PubMed API",
 }
 
 # ── Session state init ────────────────────────────────────────────────────────
@@ -173,6 +178,28 @@ def render_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
+def render_message_with_pdf(content: str):
+    """Detects PDF_GENERATED tag, strips it from text, and renders a download button."""
+    match = re.search(r'\[PDF_GENERATED:\s*(.*?)\]', content)
+    if match:
+        pdf_path = match.group(1)
+        clean_content = content.replace(match.group(0), "").strip()
+        st.markdown(clean_content)
+        try:
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+            st.download_button(
+                label="📥 Download PDF Report",
+                data=pdf_bytes,
+                file_name=os.path.basename(pdf_path),
+                mime="application/pdf",
+                key=uuid.uuid4().hex  # unique key to prevent UI collisions
+            )
+        except Exception:
+            pass
+    else:
+        st.markdown(content)
+
 # ── Message rendering ─────────────────────────────────────────────────────────
 def render_messages():
     for msg in st.session_state.messages:
@@ -191,7 +218,7 @@ def render_messages():
                         f'🔧 Used: {badges}</div>',
                         unsafe_allow_html=True,
                     )
-                st.markdown(msg["content"])
+                render_message_with_pdf(msg["content"])
 
 # ── Core: stream a response from the graph ────────────────────────────────────
 def run_agent(user_input: str):
@@ -238,7 +265,8 @@ def run_agent(user_input: str):
                                 if not getattr(msg, "tool_calls", None):
                                     final_response = msg.content
                                     status.empty()
-                                    output.markdown(final_response)
+                                    with output.container():
+                                        render_message_with_pdf(final_response)
 
         except Exception as e:
             final_response = f"⚠️ Something went wrong: {e}"
